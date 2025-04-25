@@ -1,15 +1,14 @@
 {
-    "name": "translator-api",
-    "version": "1.0.0",
-    "main": "server.js",
-    "type": "commonjs",
-    "scripts": {
-      "start": "node server.js"
-    },
-    "dependencies": {
-      "cors": "^2.8.5",
-      "express": "^4.18.2",
-      "google-translate-api-x": "^1.0.11"
-    }
+  "name": "translator-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "@vitalets/google-translate-api": "^8.0.0"
   }
-  
+}
