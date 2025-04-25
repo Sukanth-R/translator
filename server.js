@@ -1,5 +1,5 @@
 const express = require('express');
-const translate = require('google-translate-api-x');
+const translate = require('@vitalets/google-translate-api');
 const cors = require('cors');
 
 const app = express();
@@ -10,35 +10,33 @@ app.use(cors());
 app.post('/translate/batch', async (req, res) => {
   try {
     const { texts, from, to } = req.body;
-    
-    // Validate input
+
     if (!Array.isArray(texts) || !from || !to) {
       return res.status(400).json({ error: 'Invalid request format' });
     }
 
-    // Process translations in parallel with error handling for each
     const translationPromises = texts.map(text => {
       return translate(String(text), { from, to })
-        .then(result => result.text) // Extract just the translated text
+        .then(result => result.text)
         .catch(err => {
           console.error('Error translating text:', text, err);
-          return String(text); // Return original text if translation fails
+          return String(text);
         });
     });
 
     const translatedTexts = await Promise.all(translationPromises);
-    
-    res.json({ 
+
+    res.json({
       success: true,
-      translatedTexts 
+      translatedTexts
     });
-    
+
   } catch (error) {
     console.error('Batch translation error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Translation failed',
-      details: error.message 
+      details: error.message
     });
   }
 });
