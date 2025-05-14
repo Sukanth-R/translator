@@ -5,11 +5,7 @@ const cors = require("cors");
 
 const app = express();
 app.use(bodyParser.json({ limit: "10mb" }));
-app.use(cors({
-  origin: 'https://astraautomax.in', // or http://localhost:3000 for local testing
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type'],
-}));
+app.use(cors());
 
 const mongoURI = "mongodb+srv://sukanth:sukanth0021@cluster0.qknti.mongodb.net/automax?retryWrites=true&w=majority&appName=Cluster0";
 
