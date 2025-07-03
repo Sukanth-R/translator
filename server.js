@@ -22,6 +22,17 @@ mongoose.connect(mongoURI, {
   useUnifiedTopology: true,
 });
 
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
+// Admin Schema
+const adminSchema = new mongoose.Schema({
+  email: { type: String, required: true },
+  password: { type: String, required: true },
+}, { timestamps: true });
+
+const Admin = mongoose.model('Admin', adminSchema, 'admin');
+
 
 const productSchema = new mongoose.Schema({
   name: String,
@@ -241,6 +252,40 @@ app.delete("/api/products/:id", async (req, res) => {
 app.get("/", (req, res) => {
   res.send("Automax server is live 🚀");
 });
+
+const JWT_SECRET = "super_secret_key"; // Change this to a secure value or store in .env
+
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check for email and password
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // Find admin by email
+    const admin = await Admin.findOne({ email });
+    if (!admin) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Compare hashed passwords
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Generate JWT
+    const token = jwt.sign({ id: admin._id, email: admin.email }, JWT_SECRET, { expiresIn: "1h" });
+
+    res.json({ token });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
