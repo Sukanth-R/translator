@@ -1,44 +1,38 @@
-require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const cloudinary = require("cloudinary").v2;
 
 const app = express();
 app.use(bodyParser.json({ limit: "10mb" }));
-
 const corsOptions = {
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 };
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 
-// ====== CLOUDINARY CONFIG ======
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+const mongoURI = "mongodb+srv://sukanth:sukanth0021@cluster0.qknti.mongodb.net/automax?retryWrites=true&w=majority&appName=Cluster0";
+
+mongoose.connect(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
 
-// ====== MONGODB CONNECTION ======
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log("MongoDB connected successfully"))
-.catch(err => console.error("MongoDB connection error:", err));
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
-// ====== SCHEMAS ======
+// Admin Schema
 const adminSchema = new mongoose.Schema({
   email: { type: String, required: true },
   password: { type: String, required: true },
 }, { timestamps: true });
-const Admin = mongoose.model("Admin", adminSchema, "admin");
+
+const Admin = mongoose.model('Admin', adminSchema, 'admin');
+
 
 const productSchema = new mongoose.Schema({
   name: String,
@@ -46,11 +40,20 @@ const productSchema = new mongoose.Schema({
   volt: String,
   partNo: String,
   color: String,
-  imageUrl: String, // store Cloudinary URL instead of Buffer
-  stock: String,
+  image: Buffer,
+  stock:String,
 });
+
 const Product = mongoose.model("Product", productSchema);
 
+mongoose.connect(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('MongoDB connected successfully'))
+.catch(err => console.error('MongoDB connection error:', err));
+
+// Contact Schema
 const contactSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true },
@@ -60,49 +63,66 @@ const contactSchema = new mongoose.Schema({
   message: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
-const Contact = mongoose.model("Contact", contactSchema, "contacts");
 
-// ====== CONTACT ROUTES ======
-app.get("/api/contacts", async (req, res) => {
+const Contact = mongoose.model('Contact', contactSchema, 'contacts');
+
+// Add this to your existing server.js file
+
+// API Endpoint to fetch all contacts
+app.get('/api/contacts', async (req, res) => {
   try {
-    const contacts = await Contact.find().sort({ createdAt: -1 });
+    const contacts = await Contact.find().sort({ createdAt: -1 }); // Sort by newest first
     res.status(200).json(contacts);
   } catch (error) {
-    console.error("Error fetching contacts:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error fetching contacts:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-app.post("/api/contact", async (req, res) => {
+// API Endpoint to handle form submission
+app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, mobile, country, subject, message } = req.body;
+    
+    // Validate required fields
     if (!name || !email || !mobile || !country || !subject || !message) {
-      return res.status(400).json({ error: "All fields are required" });
+      return res.status(400).json({ error: 'All fields are required' });
     }
-    const newContact = new Contact({ name, email, mobile, country, subject, message });
+
+    // Create new contact document
+    const newContact = new Contact({
+      name,
+      email,
+      mobile,
+      country,
+      subject,
+      message
+    });
+
+    // Save to database
     await newContact.save();
-    res.status(201).json({ message: "Contact form submitted successfully", contact: newContact });
+
+    res.status(201).json({ message: 'Contact form submitted successfully', contact: newContact });
   } catch (error) {
-    console.error("Error submitting contact form:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error submitting contact form:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ====== PRODUCT ROUTES ======
 
 // Add a new product
 app.post("/api/products", async (req, res) => {
   try {
-    const { name, category, volt, partNo, color, image, stock } = req.body;
+    const { name, category, volt, partNo, color, image,stock } = req.body;
+
+    // Validate required fields
     if (!name || !category || !volt || !partNo || !color || !image || !stock) {
       return res.status(400).json({ error: "All fields are required" });
     }
+
+    // Validate image format
     if (!image.startsWith("data:image")) {
       return res.status(400).json({ error: "Invalid image format" });
     }
-
-    // Upload image to Cloudinary
-    const uploadResponse = await cloudinary.uploader.upload(image, { folder: "products" });
 
     const product = new Product({
       name,
@@ -110,7 +130,7 @@ app.post("/api/products", async (req, res) => {
       volt,
       partNo,
       color,
-      imageUrl: uploadResponse.secure_url,
+      image: Buffer.from(image.split(",")[1], "base64"),
       stock,
     });
 
@@ -126,31 +146,66 @@ app.post("/api/products", async (req, res) => {
 app.get("/api/products", async (req, res) => {
   try {
     const products = await Product.find();
-    res.status(200).json(products);
+    const formattedProducts = products.map((product) => ({
+      _id: product._id,
+      name: product.name,
+      category: product.category,
+      volt: product.volt,
+      partNo: product.partNo,
+      color: product.color,
+      image: product.image ? product.image.toString("base64") : null,
+      stock:product.stock,
+    }));
+
+    res.status(200).json(formattedProducts);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Fetch product by ID
+// Fetch a specific product by ID
 app.get("/api/products/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
-    res.status(200).json(product);
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    const formattedProduct = {
+      _id: product._id,
+      name: product.name,
+      category: product.category,
+      volt: product.volt,
+      partNo: product.partNo,
+      color: product.color,
+      image: product.image ? product.image.toString("base64") : null,
+      stock:product.stock,
+    };
+
+    res.status(200).json(formattedProduct);
   } catch (error) {
     console.error("Error fetching product:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-// Update product
+// Update a product by ID
 app.put("/api/products/:id", async (req, res) => {
   try {
+    const { id } = req.params;
     const { name, category, volt, partNo, color, image, stock } = req.body;
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
 
+    console.log("Received update request for product ID:", id);
+    console.log("Request body:", req.body);
+
+    // Find the product by ID
+    const product = await Product.findById(id);
+    if (!product) {
+      console.log("Product not found");
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // Update the product fields
     product.name = name || product.name;
     product.category = category || product.category;
     product.volt = volt || product.volt;
@@ -158,12 +213,21 @@ app.put("/api/products/:id", async (req, res) => {
     product.color = color || product.color;
     product.stock = stock || product.stock;
 
-    if (image && image.startsWith("data:image")) {
-      const uploadResponse = await cloudinary.uploader.upload(image, { folder: "products" });
-      product.imageUrl = uploadResponse.secure_url;
+    // Update the image if provided
+    if (image) {
+      if (image.startsWith("data:image")) {
+        console.log("Updating image");
+        product.image = Buffer.from(image.split(",")[1], "base64");
+      } else {
+        console.log("Invalid image format. Image not updated.");
+      }
+    } else {
+      console.log("No image provided. Image not updated.");
     }
 
+    // Save the updated product
     await product.save();
+    console.log("Product updated successfully");
     res.status(200).json({ message: "Product updated successfully" });
   } catch (error) {
     console.error("Error updating product:", error);
@@ -171,33 +235,50 @@ app.put("/api/products/:id", async (req, res) => {
   }
 });
 
-// Delete product
+// Delete a product by ID
 app.delete("/api/products/:id", async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    const { id } = req.params;
+    const product = await Product.findByIdAndDelete(id);
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
     res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
     console.error("Error deleting product:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+app.get("/", (req, res) => {
+  res.send("Automax server is live 🚀");
+});
 
-// ====== AUTH ======
-const JWT_SECRET = process.env.JWT_SECRET || "super_secret_key";
+const JWT_SECRET = "super_secret_key"; // Change this to a secure value or store in .env
 
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
 
+    // Check for email and password
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // Find admin by email
     const admin = await Admin.findOne({ email });
-    if (!admin) return res.status(401).json({ message: "Invalid credentials" });
+    if (!admin) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
+    // Compare hashed passwords
     const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
+    // Generate JWT
     const token = jwt.sign({ id: admin._id, email: admin.email }, JWT_SECRET, { expiresIn: "1h" });
+
     res.json({ token });
   } catch (error) {
     console.error("Login error:", error);
@@ -205,13 +286,8 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// ====== ROOT ======
-app.get("/", (req, res) => {
-  res.send("Automax server is live 🚀");
-});
 
-// ====== SERVER ======
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
